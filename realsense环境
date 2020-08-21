@@ -1,0 +1,14 @@
+安装sdk：
+首先uname -r查询内核版本，4.40以后的内核版本都可以
+sudo apt-get install libglfw3-dev
+sudo apt-key adv --keyserver keys.gnupg.net --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE || sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE
+sudo add-apt-repository "deb http://realsense-hw-public.s3.amazonaws.com/Debian/apt-repo xenial main" -u
+sudo apt-get install librealsense2-dkms
+sudo apt-get install librealsense2-utils
+sudo apt-get install librealsense2-dev
+sudo apt-get install librealsense2-dbg
+验证安装：重新插上摄像头并运行realsense-viewer
+运行：modinfo uvcvideo | grep "version:"应包含realsense字符串
+
+安装pyrealsense：
+pip3 install pyrealsense2
