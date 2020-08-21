@@ -17,7 +17,6 @@ from utils.utils import *
 
 import math
 import numpy as np
-import sys
 import os
 import time
 
