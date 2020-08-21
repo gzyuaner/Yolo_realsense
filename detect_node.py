@@ -25,11 +25,13 @@ import cv2
 
 class DetectObject:
     def __init__(self):
-        self.targetclass=opt.targetclass
-        self.__target_class_sub_=rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB,queue_size=5)
-        self.__target_position_pub_=rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped, queue_size=5)
-        self.__apriltag_switch_sub_=rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch_,queue_size=5)
-        self.__target_position_pub_=rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.Transform, queue_size=5)
+        self.targetclass = opt.targetclass
+        self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB, queue_size=5)
+        self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped, queue_size=5)
+        # self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch_,
+        #                                                queue_size=5)
+        # self.__target_position_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.TransformStamped,
+        #                                               queue_size=5)
         self.__pipeline = rs.pipeline()
         config = rs.config()
         config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
@@ -68,7 +70,7 @@ class DetectObject:
         img_depth = np.array(depth_frame.get_data())
         cv2.imwrite(opt.source, img_color)
 
-        #detection section
+        # detection section
         img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
         out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
         webcam = source == '0' or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
