@@ -4,7 +4,7 @@ sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import argparse
 from sys import platform
 
-from models import *
+from models import *  # set ONNX_EXPORT in models.py
 from utils.datasets import *
 from utils.utils import *
 
