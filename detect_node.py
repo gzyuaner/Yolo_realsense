@@ -23,38 +23,45 @@ import time
 import pyrealsense2 as rs
 import cv2
 
+# initialize apriltag module
+from scipy.spatial.transform import Rotation as Rota
+from pupil_apriltags import Detector
+
+
 class DetectObject:
     def __init__(self):
         self.targetclass = opt.targetclass
         self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB, queue_size=5)
-        self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped, queue_size=5)
+        self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped,
+                                                      queue_size=5)
         # self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch_,
         #                                                queue_size=5)
         # self.__target_position_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.TransformStamped,
         #                                               queue_size=5)
+        # TODO: Wish to fix
         self.__pipeline = rs.pipeline()
         config = rs.config()
         config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
         config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
         # Start streaming
         self.__pipe_profile = self.__pipeline.start(config)
-    
+
     def __del__(self):
         # Close the camera
         self.__pipeline.stop()
-    
-    def targetClassCB(self,msg):
-        '''receive target class index and start to detect'''
-        self.targetclass=msg.data
-        rospy.loginfo('got target class index:%d',self.targetclass)
+
+    def targetClassCB(self, msg):
+        # receive target class index and start to detect
+        self.targetclass = msg.data
+        rospy.loginfo('got target class index:%d', self.targetclass)
         with torch.no_grad():
             self.__detect()
         return
-    
-    def __detect(self,save_img=False):
+
+    def __detect(self, save_img=False):
         # Declare pointcloud object, for calculating pointclouds and texture mappings
         pc = rs.pointcloud()
-     
+
         # Create an align object
         # rs.align allows us to perform alignment of depth frames to others frames
         # The "align_to" is the stream type to which we plan to align depth frames.
@@ -65,7 +72,7 @@ class DetectObject:
         aligned_frames = align.process(frames)
         depth_frame = aligned_frames.get_depth_frame()
         color_frame = aligned_frames.get_color_frame()
-        #time.sleep(8)
+        # time.sleep(8)
         img_color = np.array(color_frame.get_data())
         img_depth = np.array(depth_frame.get_data())
         cv2.imwrite(opt.source, img_color)
@@ -182,13 +189,13 @@ class DetectObject:
                     for c in det[:, -1].unique():
                         n = (det[:, -1] == c).sum()  # detections per class
                         s += '%g %ss, ' % (n, names[int(c)])  # add to string
-                    #stop_num = 0                
-                    #print('c = ',len(det))
+                    # stop_num = 0
+                    # print('c = ',len(det))
                     target_detected=False
                     # Write results
                     for *xyxy, conf, cls in det:
-                        c1, c2 = (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3]))
-                        c0 = ((int(xyxy[0])+int(xyxy[2]))/2, (int(xyxy[1])+int(xyxy[3]))/2)
+                        # c1, c2 = (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3]))
+                        # c0 = ((int(xyxy[0])+int(xyxy[2]))/2, (int(xyxy[1])+int(xyxy[3]))/2)
                         if save_txt:  # Write to file
                             with open(save_path + '.txt', 'a') as file:
                                 file.write(('%g ' * 6 + '\n') % (*xyxy, cls, conf))
@@ -197,7 +204,7 @@ class DetectObject:
                             label = '%s %.2f' % (names[int(cls)], conf)
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
-                        #print(c0)
+                        # print(c0)
 
                         if int(cls) == self.targetclass:
                             x_center = int((int(xyxy[0])+int(xyxy[2]))/2)
@@ -215,7 +222,7 @@ class DetectObject:
                             # Map depth to color
                             depth_pixel = [240, 320]   # Random pixel
                             depth_point = rs.rs2_deproject_pixel_to_point(depth_intrin, depth_pixel, depth_scale)
-     
+
                             color_point = rs.rs2_transform_point_to_point(depth_to_color_extrin, depth_point)
                             color_pixel = rs.rs2_project_point_to_pixel(color_intrin, color_point)
 
@@ -224,7 +231,7 @@ class DetectObject:
                             vtx = np.array(points.get_vertices())
                             tex = np.array(points.get_texture_coordinates())
                             pix_num = 1280 * y_center + x_center
-                            
+
 
                             point_cloud_value = [np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2])]
                             print('point_cloud_value:',point_cloud_value,names[int(cls)],int(cls))
@@ -236,22 +243,22 @@ class DetectObject:
                                 self.__target_position_pub_.publish(position_result)#publish the result
                                 target_detected=True
                                 rospy.loginfo('The target has been detected!')
-                                break   #only the target class
-                                #os.system('rostopic pub -1 /goal_pose geometry_msgs/PointStamped [0,[0,0],zed_left_camera_optical_frame] [%s,%s,%s]' %(np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2]))
-                                #os.system('rostopic pub -1 /start_plan std_msgs/Bool 1')
-                            #else:
-                                #os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
-                                #print("Can't estimate point cloud at this position.")
-                        #stop_num += 1
-                        #if stop_num >= len(det):
-                        #    os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
+                                break   # only the target class
+                                # os.system('rostopic pub -1 /goal_pose geometry_msgs/PointStamped [0,[0,0],zed_left_camera_optical_frame] [%s,%s,%s]' %(np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2]))
+                                # os.system('rostopic pub -1 /start_plan std_msgs/Bool 1')
+                            # else:
+                                # os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
+                                # print("Can't estimate point cloud at this position.")
+                        # stop_num += 1
+                        # if stop_num >= len(det):
+                        #     os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
                     if not target_detected:
                         position_result.header.frame_id='empty'
-                        self.__target_position_pub_.publish(position_result)#publish failure topic
+                        self.__target_position_pub_.publish(position_result)  # publish failure topic
                         rospy.logwarn('Fail to detect the target!')
                 else:
                     position_result.header.frame_id='empty'
-                    self.__target_position_pub_.publish(position_result)#publish failure topic
+                    self.__target_position_pub_.publish(position_result)  # publish failure topic
                     rospy.logwarn('Fail to detect any target!')
 
                 # Print time (inference + NMS)
@@ -287,6 +294,7 @@ class DetectObject:
         print('Done. (%.3fs)' % (time.time() - t0))
         return
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='*.cfg path')
@@ -305,7 +313,7 @@ if __name__ == '__main__':
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--targetclass', type=int, default=0, help='targetclass')  #input class which needs to be detected
+    parser.add_argument('--targetclass', type=int, default=0, help='targetclass')  # input class which needs to be detected
     opt = parser.parse_args()
     print(opt)
     rospy.init_node('detect_node')
