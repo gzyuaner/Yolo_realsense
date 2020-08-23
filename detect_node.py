@@ -23,7 +23,7 @@ import time
 import pyrealsense2 as rs
 import cv2
 
-# initialize apriltag module
+# initialize AprilTag module
 from scipy.spatial.transform import Rotation as Rota
 from pupil_apriltags import Detector
 
@@ -31,14 +31,14 @@ from pupil_apriltags import Detector
 class DetectObject:
     def __init__(self):
         self.targetclass = opt.targetclass
-        self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB, queue_size=5)
+        self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB,
+                                                    queue_size=5)
         self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped,
                                                       queue_size=5)
-        # self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch_,
-        #                                                queue_size=5)
-        # self.__target_position_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.TransformStamped,
-        #                                               queue_size=5)
-        # TODO: Wish to fix
+        self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch,
+                                                       queue_size=5)
+        self.__apriltag_pose_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.PoseStamped,
+                                                    queue_size=5)
         self.__pipeline = rs.pipeline()
         config = rs.config()
         config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
@@ -240,7 +240,7 @@ class DetectObject:
                                 position_result.point.x=np.float(vtx[pix_num][0])
                                 position_result.point.y=np.float(vtx[pix_num][1])
                                 position_result.point.z=np.float(vtx[pix_num][2])
-                                self.__target_position_pub_.publish(position_result)#publish the result
+                                self.__target_position_pub_.publish(position_result)  # publish the result
                                 target_detected=True
                                 rospy.loginfo('The target has been detected!')
                                 break   # only the target class
@@ -292,6 +292,52 @@ class DetectObject:
                 os.system('open ' + out + ' ' + save_path)
 
         print('Done. (%.3fs)' % (time.time() - t0))
+        return
+
+    def apriltag_switch(self, msg):
+        self.switch = msg.data
+        if self.switch:
+            rospy.loginfo('begin to detect tags')
+            self.apriltag_detect()
+            return
+
+    def apriltag_detect(self, tag_size=0.083):
+        at_detector = Detector(families='tag36h11',
+                               nthreads=1,
+                               quad_decimate=1.0,
+                               quad_sigma=0.0,
+                               refine_edges=1,
+                               decode_sharpening=0.25,
+                               debug=0)
+        # Wait for a coherent pair of color frame
+        frames = self.__pipeline.wait_for_frames()
+        color_frame = frames.get_color_frame()
+        color_image = np.array(color_frame.get_data())
+        # get the camera intrinsics
+        color_intrin = color_frame.profile.as_video_stream_profile().intrinsics
+        color_intrin_part = [color_intrin.fx, color_intrin.fy, color_intrin.ppx, color_intrin.ppy]
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
+        tags = at_detector.detect(gray_image, estimate_tag_pose=True, camera_params=color_intrin_part,
+                                  tag_size=tag_size)
+        if tags:
+            for tag in tags:
+                r = Rota.from_matrix(tag.pose_R)
+                r_quat = r.as_quat()
+                r_pose = tag.pose_t
+                tag_id = tag.tag_id
+                p1 = geometry_msgs.msg.PoseStamped()
+                p1.header.frame_id = 'apriltag_'+str(tag_id)
+                p1.pose.orientation.w = r_quat[3]
+                p1.pose.orientation.x = r_quat[0]
+                p1.pose.orientation.y = r_quat[1]
+                p1.pose.orientation.z = r_quat[2]
+                p1.pose.position.x = r_pose[0]
+                p1.pose.position.y = r_pose[1]
+                p1.pose.position.z = r_pose[2]
+                self.__apriltag_pose_pub_.publish(p1)
+            rospy.loginfo('The april_tags have been detected!')
+        else:
+            rospy.logwarn('Fail to detect any april_tags!')
         return
 
 
