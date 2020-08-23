@@ -4,6 +4,7 @@
 import rospy
 import std_msgs.msg
 import geometry_msgs.msg
+import tf
 
 import sys
 sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
@@ -37,8 +38,8 @@ class DetectObject:
                                                       queue_size=5)
         self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch,
                                                        queue_size=5)
-        self.__apriltag_pose_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.PoseStamped,
-                                                    queue_size=5)
+        # self.__apriltag_pose_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.PoseStamped,
+        #                                             queue_size=5)
         self.__pipeline = rs.pipeline()
         config = rs.config()
         config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
@@ -323,18 +324,26 @@ class DetectObject:
             for tag in tags:
                 r = Rota.from_matrix(tag.pose_R)
                 r_quat = r.as_quat()
+                # r_euler = r.as_euler('zxy', degrees=True)
                 r_pose = tag.pose_t
                 tag_id = tag.tag_id
+                # print(r_pose, tag_id)
                 p1 = geometry_msgs.msg.PoseStamped()
-                p1.header.frame_id = 'apriltag_'+str(tag_id)
-                p1.pose.orientation.w = r_quat[3]
-                p1.pose.orientation.x = r_quat[0]
-                p1.pose.orientation.y = r_quat[1]
-                p1.pose.orientation.z = r_quat[2]
-                p1.pose.position.x = r_pose[0]
-                p1.pose.position.y = r_pose[1]
-                p1.pose.position.z = r_pose[2]
-                self.__apriltag_pose_pub_.publish(p1)
+                br = tf.TransformBroadcaster()
+                br.sendTransform((msg.x, msg.y, 0),
+                                 tf.transformations.quaternion_from_euler(0, 0, msg.theta),
+                                 rospy.Time.now(),
+                                 'apriltag_'+str(tag_id),
+                                 "world")
+                # p1.header.frame_id = 'apriltag_'+str(tag_id)
+                # p1.pose.orientation.w = -r_quat[3]
+                # p1.pose.orientation.x = r_quat[0]
+                # p1.pose.orientation.y = r_quat[1]
+                # p1.pose.orientation.z = r_quat[2]
+                # p1.pose.position.x = r_pose[0]
+                # p1.pose.position.y = r_pose[1]
+                # p1.pose.position.z = r_pose[2]
+                # self.__apriltag_pose_pub_.publish(p1)
             rospy.loginfo('The april_tags have been detected!')
         else:
             rospy.logwarn('Fail to detect any april_tags!')
@@ -366,4 +375,3 @@ if __name__ == '__main__':
     detect_node=DetectObject()
     rospy.loginfo('detect_node is activated.')
     rospy.spin()
-
