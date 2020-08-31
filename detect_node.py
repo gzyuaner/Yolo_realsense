@@ -355,7 +355,7 @@ class DetectObject:
         else:
             rospy.logwarn('Fail to detect any april_tags!')
         # print('finish tags')
-        # Release memory is necessary
+        # Release memory is necessary, to solve the segment fault
         del tags
         gc.collect()
         return
