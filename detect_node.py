@@ -29,10 +29,15 @@ import cv2
 from scipy.spatial.transform import Rotation as Rota
 from pupil_apriltags import Detector
 
+# import pdb
+# pdb.set_trace()
+import gc
+
 
 class DetectObject:
     def __init__(self):
         self.targetclass = opt.targetclass
+        self.switch = False
         self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB,
                                                     queue_size=5)
         self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped,
@@ -300,10 +305,11 @@ class DetectObject:
         self.switch = msg.data
         if self.switch:
             rospy.loginfo('begin to detect tags')
-            self.apriltag_detect()
-            return
+            self.__apriltag_detect()
+            # print('finish a detection')
+        return
 
-    def apriltag_detect(self, tag_size=0.083):
+    def __apriltag_detect(self, tag_size=0.083):
         at_detector = Detector(families='tag36h11',
                                nthreads=1,
                                quad_decimate=1.0,
@@ -314,7 +320,7 @@ class DetectObject:
         # Wait for a coherent pair of color frame
         frames = self.__pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
-        color_image = np.array(color_frame.get_data())
+        color_image = np.asanyarray(color_frame.get_data())
         # get the camera intrinsics
         color_intrin = color_frame.profile.as_video_stream_profile().intrinsics
         color_intrin_part = [color_intrin.fx, color_intrin.fy, color_intrin.ppx, color_intrin.ppy]
@@ -348,6 +354,10 @@ class DetectObject:
             rospy.loginfo('The april_tags have been detected!')
         else:
             rospy.logwarn('Fail to detect any april_tags!')
+        # print('finish tags')
+        # Release memory is necessary
+        del tags
+        gc.collect()
         return
 
 
@@ -373,6 +383,6 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt)
     rospy.init_node('detect_node')
-    detect_node=DetectObject()
+    detect_node = DetectObject()
     rospy.loginfo('detect_node is activated.')
     rospy.spin()
