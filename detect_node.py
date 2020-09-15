@@ -311,7 +311,7 @@ class DetectObject:
 
     def __apriltag_detect(self, tag_size=0.083):
         at_detector = Detector(families='tag36h11',
-                               nthreads=1,
+                               nthreads=4,
                                quad_decimate=1.0,
                                quad_sigma=0.0,
                                refine_edges=1,
@@ -354,9 +354,9 @@ class DetectObject:
             rospy.loginfo('The april_tags have been detected!')
         else:
             rospy.logwarn('Fail to detect any april_tags!')
-        # print('finish tags')
+        # print('finish tags', id(tags))
         # Release memory is necessary, to solve the segment fault
-        del tags
+        del at_detector, tags
         gc.collect()
         return
 
