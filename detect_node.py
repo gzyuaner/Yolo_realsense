@@ -353,6 +353,16 @@ class DetectObject:
                 #                  "world")
             rospy.loginfo('The april_tags have been detected!')
         else:
+            p2 = geometry_msgs.msg.PoseStamped()
+            p2.header.frame_id = 'empty'
+            p2.pose.orientation.w = 1
+            p2.pose.orientation.x = 0
+            p2.pose.orientation.y = 0
+            p2.pose.orientation.z = 0
+            p2.pose.position.x = 0
+            p2.pose.position.y = 0
+            p2.pose.position.z = 0
+            self.__apriltag_pose_pub_.publish(p2)
             rospy.logwarn('Fail to detect any april_tags!')
         # print('finish tags', id(tags))
         # Release memory is necessary, to solve the segment fault
