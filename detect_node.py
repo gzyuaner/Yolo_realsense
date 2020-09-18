@@ -52,6 +52,14 @@ class DetectObject:
         config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
         # Start streaming
         self.__pipe_profile = self.__pipeline.start(config)
+        self.tags =[]
+        self.at_detector = Detector(families='tag36h11',
+                               nthreads=4,
+                               quad_decimate=1.0,
+                               quad_sigma=0.0,
+                               refine_edges=1,
+                               decode_sharpening=0.25,
+                               debug=0)
 
     def __del__(self):
         # Close the camera
@@ -310,13 +318,6 @@ class DetectObject:
         return
 
     def __apriltag_detect(self, tag_size=0.083):
-        at_detector = Detector(families='tag36h11',
-                               nthreads=4,
-                               quad_decimate=1.0,
-                               quad_sigma=0.0,
-                               refine_edges=1,
-                               decode_sharpening=0.25,
-                               debug=0)
         # Wait for a coherent pair of color frame
         frames = self.__pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
@@ -325,20 +326,24 @@ class DetectObject:
         color_intrin = color_frame.profile.as_video_stream_profile().intrinsics
         color_intrin_part = [color_intrin.fx, color_intrin.fy, color_intrin.ppx, color_intrin.ppy]
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
-        tags = at_detector.detect(gray_image, estimate_tag_pose=True, camera_params=color_intrin_part,
-                                  tag_size=tag_size)
-        if tags:
-            for tag in tags:
+        self.tags = self.at_detector.detect(gray_image, estimate_tag_pose=True, camera_params=color_intrin_part,
+                                            tag_size=tag_size)
+        if self.tags:
+            for tag in self.tags:
                 r = Rota.from_matrix(tag.pose_R)
+                print(tag.pose_R)
                 r_quat = r.as_quat()
+                r_euler = r.as_euler(seq='XYZ', degrees=True)
+                print(r_euler)
                 # r_euler = r.as_euler('zxy', degrees=True)
                 r_pose = tag.pose_t
+                print(r_pose)
                 tag_id = tag.tag_id
                 # print(r_pose, tag_id)
                 p1 = geometry_msgs.msg.PoseStamped()
                 # br = tf.TransformBroadcaster()
                 p1.header.frame_id = 'apriltag_'+str(tag_id)
-                p1.pose.orientation.w = -r_quat[3]
+                p1.pose.orientation.w = r_quat[3]
                 p1.pose.orientation.x = r_quat[0]
                 p1.pose.orientation.y = r_quat[1]
                 p1.pose.orientation.z = r_quat[2]
@@ -355,19 +360,19 @@ class DetectObject:
         else:
             p2 = geometry_msgs.msg.PoseStamped()
             p2.header.frame_id = 'empty'
-            p2.pose.orientation.w = 1
-            p2.pose.orientation.x = 0
-            p2.pose.orientation.y = 0
-            p2.pose.orientation.z = 0
-            p2.pose.position.x = 0
-            p2.pose.position.y = 0
-            p2.pose.position.z = 0
+            p2.pose.orientation.w = 1.
+            p2.pose.orientation.x = 0.
+            p2.pose.orientation.y = 0.
+            p2.pose.orientation.z = 0.
+            p2.pose.position.x = 0.
+            p2.pose.position.y = 0.
+            p2.pose.position.z = 0.
             self.__apriltag_pose_pub_.publish(p2)
             rospy.logwarn('Fail to detect any april_tags!')
         # print('finish tags', id(tags))
         # Release memory is necessary, to solve the segment fault
-        del at_detector, tags
-        gc.collect()
+        # del self.at_detector, self.tags
+        # gc.collect()
         return
 
 
