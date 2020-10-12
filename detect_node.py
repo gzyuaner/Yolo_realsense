@@ -222,8 +222,13 @@ class DetectObject:
                         # print(c0)
 
                         if int(cls) == self.targetclass:
-                            x_center = int((int(xyxy[0])+int(xyxy[2]))/2)
+                            if int(cls) == 41:
+                                x_center = int((int(3*xyxy[0]) + int(5*xyxy[2])) / 8)
+                            else:
+                                x_center = int((int(xyxy[0]) + int(xyxy[2])) / 2)
+                            # x_center = int((int(xyxy[0])+int(xyxy[2]))/2)
                             y_center = int((int(xyxy[1])+int(xyxy[3]))/2)
+                            # print('zuobiao', xyxy[0], xyxy[2])
 
                             # Intrinsics and Extrinsics
                             depth_intrin = depth_frame.profile.as_video_stream_profile().intrinsics
@@ -248,15 +253,15 @@ class DetectObject:
                             pix_num = 1280 * y_center + x_center
 
 
-                            point_cloud_value = [np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2])]
-                            print('point_cloud_value:',point_cloud_value,names[int(cls)],int(cls))
-                            if np.float(vtx[pix_num][2])>0.11:
-                                position_result.header.frame_id='camera_color_optical_frame'
-                                position_result.point.x=np.float(vtx[pix_num][0])
-                                position_result.point.y=np.float(vtx[pix_num][1])
-                                position_result.point.z=np.float(vtx[pix_num][2])
+                            point_cloud_value = [np.float(vtx[pix_num][0]), np.float(vtx[pix_num][1]), np.float(vtx[pix_num][2])]
+                            print('point_cloud_value:', point_cloud_value, names[int(cls)], int(cls))
+                            if np.float(vtx[pix_num][2]) > 0.11:
+                                position_result.header.frame_id = 'camera_color_optical_frame'
+                                position_result.point.x = np.float(vtx[pix_num][0])
+                                position_result.point.y = np.float(vtx[pix_num][1])
+                                position_result.point.z = np.float(vtx[pix_num][2])
                                 self.__target_position_pub_.publish(position_result)  # publish the result
-                                target_detected=True
+                                target_detected = True
                                 rospy.loginfo('The target has been detected!')
                                 break   # only the target class
                                 # os.system('rostopic pub -1 /goal_pose geometry_msgs/PointStamped [0,[0,0],zed_left_camera_optical_frame] [%s,%s,%s]' %(np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2]))
@@ -268,11 +273,11 @@ class DetectObject:
                         # if stop_num >= len(det):
                         #     os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
                     if not target_detected:
-                        position_result.header.frame_id='empty'
+                        position_result.header.frame_id = 'empty'
                         self.__target_position_pub_.publish(position_result)  # publish failure topic
                         rospy.logwarn('Fail to detect the target!')
                 else:
-                    position_result.header.frame_id='empty'
+                    position_result.header.frame_id = 'empty'
                     self.__target_position_pub_.publish(position_result)  # publish failure topic
                     rospy.logwarn('Fail to detect any target!')
 
