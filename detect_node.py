@@ -31,18 +31,18 @@ from pupil_apriltags import Detector
 
 # import pdb
 # pdb.set_trace()
-import gc
+# import gc
 
 
 class DetectObject:
     def __init__(self):
         self.targetclass = opt.targetclass
-        self.switch = False
+        self.switch = 1
         self.__target_class_sub_ = rospy.Subscriber('detect_item', std_msgs.msg.Int32, self.targetClassCB,
                                                     queue_size=5)
         self.__target_position_pub_ = rospy.Publisher('detect_item_result', geometry_msgs.msg.PointStamped,
                                                       queue_size=5)
-        self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_switch', std_msgs.msg.Bool, self.apriltag_switch,
+        self.__apriltag_switch_sub_ = rospy.Subscriber('apriltag_request', std_msgs.msg.Int32, self.apriltag_switch,
                                                        queue_size=5)
         self.__apriltag_pose_pub_ = rospy.Publisher('apriltag_pose_result', geometry_msgs.msg.PoseStamped,
                                                     queue_size=5)
@@ -52,7 +52,6 @@ class DetectObject:
         config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
         # Start streaming
         self.__pipe_profile = self.__pipeline.start(config)
-        self.tags =[]
         self.at_detector = Detector(families='tag36h11',
                                nthreads=4,
                                quad_decimate=1.0,
@@ -60,6 +59,7 @@ class DetectObject:
                                refine_edges=1,
                                decode_sharpening=0.25,
                                debug=0)
+        self.tags = []
 
     def __del__(self):
         # Close the camera
@@ -222,13 +222,8 @@ class DetectObject:
                         # print(c0)
 
                         if int(cls) == self.targetclass:
-                            if int(cls) == 41:
-                                x_center = int((int(3*xyxy[0]) + int(5*xyxy[2])) / 8)
-                            else:
-                                x_center = int((int(xyxy[0]) + int(xyxy[2])) / 2)
-                            # x_center = int((int(xyxy[0])+int(xyxy[2]))/2)
+                            x_center = int((int(xyxy[0])+int(xyxy[2]))/2)
                             y_center = int((int(xyxy[1])+int(xyxy[3]))/2)
-                            # print('zuobiao', xyxy[0], xyxy[2])
 
                             # Intrinsics and Extrinsics
                             depth_intrin = depth_frame.profile.as_video_stream_profile().intrinsics
@@ -253,15 +248,15 @@ class DetectObject:
                             pix_num = 1280 * y_center + x_center
 
 
-                            point_cloud_value = [np.float(vtx[pix_num][0]), np.float(vtx[pix_num][1]), np.float(vtx[pix_num][2])]
-                            print('point_cloud_value:', point_cloud_value, names[int(cls)], int(cls))
-                            if np.float(vtx[pix_num][2]) > 0.11:
-                                position_result.header.frame_id = 'camera_color_optical_frame'
-                                position_result.point.x = np.float(vtx[pix_num][0])
-                                position_result.point.y = np.float(vtx[pix_num][1])
-                                position_result.point.z = np.float(vtx[pix_num][2])
+                            point_cloud_value = [np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2])]
+                            print('point_cloud_value:',point_cloud_value,names[int(cls)],int(cls))
+                            if np.float(vtx[pix_num][2])>0.11:
+                                position_result.header.frame_id='camera_color_optical_frame'
+                                position_result.point.x=np.float(vtx[pix_num][0])
+                                position_result.point.y=np.float(vtx[pix_num][1])
+                                position_result.point.z=np.float(vtx[pix_num][2])
                                 self.__target_position_pub_.publish(position_result)  # publish the result
-                                target_detected = True
+                                target_detected=True
                                 rospy.loginfo('The target has been detected!')
                                 break   # only the target class
                                 # os.system('rostopic pub -1 /goal_pose geometry_msgs/PointStamped [0,[0,0],zed_left_camera_optical_frame] [%s,%s,%s]' %(np.float(vtx[pix_num][0]),np.float(vtx[pix_num][1]),np.float(vtx[pix_num][2]))
@@ -273,11 +268,11 @@ class DetectObject:
                         # if stop_num >= len(det):
                         #     os.system('rostopic pub -1 /start_plan std_msgs/Bool 0')
                     if not target_detected:
-                        position_result.header.frame_id = 'empty'
+                        position_result.header.frame_id='empty'
                         self.__target_position_pub_.publish(position_result)  # publish failure topic
                         rospy.logwarn('Fail to detect the target!')
                 else:
-                    position_result.header.frame_id = 'empty'
+                    position_result.header.frame_id='empty'
                     self.__target_position_pub_.publish(position_result)  # publish failure topic
                     rospy.logwarn('Fail to detect any target!')
 
@@ -316,10 +311,13 @@ class DetectObject:
 
     def apriltag_switch(self, msg):
         self.switch = msg.data
-        if self.switch:
-            rospy.loginfo('begin to detect tags')
-            self.__apriltag_detect()
+        if self.switch == 12:
+            rospy.loginfo('begin to detect small tag')
+            self.__apriltag_detect(0.03)
             # print('finish a detection')
+        else:
+            rospy.loginfo('begin to detect big tag')
+            self.__apriltag_detect()
         return
 
     def __apriltag_detect(self, tag_size=0.083):
@@ -332,52 +330,68 @@ class DetectObject:
         color_intrin_part = [color_intrin.fx, color_intrin.fy, color_intrin.ppx, color_intrin.ppy]
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
         self.tags = self.at_detector.detect(gray_image, estimate_tag_pose=True, camera_params=color_intrin_part,
-                                            tag_size=tag_size)
+                                  tag_size=tag_size)
         if self.tags:
+            is_break = False
             for tag in self.tags:
-                r = Rota.from_matrix(tag.pose_R)
-                print(tag.pose_R)
-                r_quat = r.as_quat()
-                r_euler = r.as_euler(seq='XYZ', degrees=True)
-                print(r_euler)
-                # r_euler = r.as_euler('zxy', degrees=True)
-                r_pose = tag.pose_t
-                print(r_pose)
-                tag_id = tag.tag_id
-                # print(r_pose, tag_id)
-                p1 = geometry_msgs.msg.PoseStamped()
-                # br = tf.TransformBroadcaster()
-                p1.header.frame_id = 'apriltag_'+str(tag_id)
-                p1.pose.orientation.w = r_quat[3]
-                p1.pose.orientation.x = r_quat[0]
-                p1.pose.orientation.y = r_quat[1]
-                p1.pose.orientation.z = r_quat[2]
-                p1.pose.position.x = r_pose[0]
-                p1.pose.position.y = r_pose[1]
-                p1.pose.position.z = r_pose[2]
-                self.__apriltag_pose_pub_.publish(p1)
-                # br.sendTransform((r_pose[0], r_pose[1], r_pose[2]),
-                #                  p1.pose.orientation(),
-                #                  rospy.Time.now(),
-                #                  'apriltag_' + str(tag_id),
-                #                  "world")
-            rospy.loginfo('The april_tags have been detected!')
+                if tag.tag_id == self.switch:
+                    r = Rota.from_matrix(tag.pose_R)
+                    r_quat = r.as_quat()
+                    # r_euler = r.as_euler('zxy', degrees=True)
+                    r_pose = tag.pose_t
+                    tag_id = tag.tag_id
+                    # print(r_pose, tag_id)
+                    p1 = geometry_msgs.msg.PoseStamped()
+                    # br = tf.TransformBroadcaster()
+                    p1.header.frame_id = 'apriltag_'+str(tag_id)
+                    p1.pose.orientation.w = r_quat[3]
+                    p1.pose.orientation.x = r_quat[0]
+                    p1.pose.orientation.y = r_quat[1]
+                    p1.pose.orientation.z = r_quat[2]
+                    p1.pose.position.x = r_pose[0]
+                    p1.pose.position.y = r_pose[1]
+                    p1.pose.position.z = r_pose[2]
+                    self.__apriltag_pose_pub_.publish(p1)
+                    rospy.loginfo('The target april_tag has been detected!')
+                    # br.sendTransform((r_pose[0], r_pose[1], r_pose[2]),
+                    #                  p1.pose.orientation(),
+                    #                  rospy.Time.now(),
+                    #                  'apriltag_' + str(tag_id),
+                    #                  "world")
+                    # time.sleep(1)
+                    is_break = True
+                    break
+                else:
+                    continue
+            if not is_break:
+                p2 = geometry_msgs.msg.PoseStamped()
+                p2.header.frame_id = 'empty'
+                p2.pose.orientation.w = 1
+                p2.pose.orientation.x = 0
+                p2.pose.orientation.y = 0
+                p2.pose.orientation.z = 0
+                p2.pose.position.x = 0
+                p2.pose.position.y = 0
+                p2.pose.position.z = 0
+                self.__apriltag_pose_pub_.publish(p2)
+                rospy.logwarn('Fail to detect target april_tag!')
         else:
-            p2 = geometry_msgs.msg.PoseStamped()
-            p2.header.frame_id = 'empty'
-            p2.pose.orientation.w = 1.
-            p2.pose.orientation.x = 0.
-            p2.pose.orientation.y = 0.
-            p2.pose.orientation.z = 0.
-            p2.pose.position.x = 0.
-            p2.pose.position.y = 0.
-            p2.pose.position.z = 0.
-            self.__apriltag_pose_pub_.publish(p2)
+            p3 = geometry_msgs.msg.PoseStamped()
+            p3.header.frame_id = 'empty'
+            p3.pose.orientation.w = 1
+            p3.pose.orientation.x = 0
+            p3.pose.orientation.y = 0
+            p3.pose.orientation.z = 0
+            p3.pose.position.x = 0
+            p3.pose.position.y = 0
+            p3.pose.position.z = 0
+            self.__apriltag_pose_pub_.publish(p3)
             rospy.logwarn('Fail to detect any april_tags!')
         # print('finish tags', id(tags))
         # Release memory is necessary, to solve the segment fault
-        # del self.at_detector, self.tags
-        # gc.collect()
+        #del at_detector, tags
+        #gc.collect()
+        self.tags.clear()
         return
 
 
